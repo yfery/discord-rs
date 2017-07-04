@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use super::model::*;
+use std::fs::OpenOptions;
 
 /// Known state composed from received events.
 #[derive(Debug, Clone)]
@@ -249,7 +250,7 @@ impl State {
 				self.servers.iter_mut().find(|s| s.id == *server_id).map(|srv| {
 					srv.member_count += 1;
 					srv.members.push(member.clone());
-                });
+
                 let mut file =
                     OpenOptions::new()
                     .write(true)
@@ -260,6 +261,7 @@ impl State {
                 if let Err(e) = writeln!(file, "ServerMemberAdd: {} ({:?})", srv.member_count, member.clone()) {
                     println!("{}", e);
                 }
+                });
             }
             Event::ServerMemberUpdate { ref server_id, ref roles, ref user, ref nick } => {
                 self.servers.iter_mut().find(|s| s.id == *server_id).map(|srv| {
