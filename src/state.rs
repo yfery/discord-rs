@@ -249,279 +249,289 @@ impl State {
 				self.servers.iter_mut().find(|s| s.id == *server_id).map(|srv| {
 					srv.member_count += 1;
 					srv.members.push(member.clone());
-				});
-			}
-			Event::ServerMemberUpdate { ref server_id, ref roles, ref user, ref nick } => {
-				self.servers.iter_mut().find(|s| s.id == *server_id).map(|srv| {
-					srv.members.iter_mut().find(|m| m.user.id == user.id).map(|member| {
-						member.user.clone_from(user);
-						member.roles.clone_from(roles);
-						member.nick.clone_from(nick);
-					})
-				});
-			}
-			Event::ServerMemberRemove(ref server_id, ref user) => {
-				self.servers.iter_mut().find(|s| s.id == *server_id).map(|srv| {
-					srv.member_count -= 1;
-					srv.members.retain(|m| m.user.id != user.id);
-				});
-			}
-			Event::ServerMembersChunk(server_id, ref members) => {
-				self.servers.iter_mut().find(|s| s.id == server_id).map(|srv| {
-					srv.members.extend_from_slice(members);
-				});
-			}
-			Event::ServerSync { server_id, large, ref members, ref presences } => {
-				self.servers.iter_mut().find(|s| s.id == server_id).map(|srv| {
-					srv.large = large;
-					srv.members.clone_from(members);
-					srv.presences.clone_from(presences);
-				});
-			}
-			Event::ServerRoleCreate(ref server_id, ref role) => {
-				self.servers.iter_mut().find(|s| s.id == *server_id).map(|srv| {
-					srv.roles.push(role.clone());
-				});
-			}
-			Event::ServerRoleUpdate(ref server_id, ref role) => {
-				self.servers.iter_mut().find(|s| s.id == *server_id).map(|srv| {
-					srv.roles.iter_mut().find(|r| r.id == role.id).map(|srv_role| {
-						srv_role.clone_from(role);
-					});
-				});
-			}
-			Event::ServerRoleDelete(ref server_id, ref role_id) => {
-				self.servers.iter_mut().find(|s| s.id == *server_id).map(|srv| {
-					srv.roles.retain(|r| r.id != *role_id);
-				});
-			}
-			Event::ChannelCreate(ref channel) => match *channel {
-				Channel::Group(ref group) => {
-					self.groups.insert(group.channel_id, group.clone());
-				}
-				Channel::Private(ref channel) => {
-					self.private_channels.push(channel.clone());
-				}
-				Channel::Public(ref channel) => {
-					self.servers.iter_mut().find(|s| s.id == channel.server_id).map(|srv| {
-						srv.channels.push(channel.clone());
-					});
-				}
-			},
-			Event::ChannelUpdate(ref channel) => match *channel {
-				Channel::Group(ref group) => {
-					use std::collections::btree_map::Entry;
-					match self.groups.entry(group.channel_id) {
-						Entry::Vacant(e) => { e.insert(group.clone()); }
-						Entry::Occupied(mut e) => {
-							let dest = e.get_mut();
-							if group.recipients.is_empty() {
-								// if the update omits the recipient list, preserve it
-								let recipients = ::std::mem::replace(&mut dest.recipients, Vec::new());
-								dest.clone_from(group);
-								dest.recipients = recipients;
-							} else {
-								dest.clone_from(group);
-							}
-						}
-					}
-				}
-				Channel::Private(ref channel) => {
-					self.private_channels.iter_mut().find(|c| c.id == channel.id).map(|chan| {
-						chan.clone_from(channel);
-					});
-				}
-				Channel::Public(ref channel) => {
-					self.servers.iter_mut().find(|s| s.id == channel.server_id).map(|srv| {
-						srv.channels.iter_mut().find(|c| c.id == channel.id).map(|chan| {
-							chan.clone_from(channel);
-						})
-					});
-				}
-			},
-			Event::ChannelDelete(ref channel) => match *channel {
-				Channel::Group(ref group) => {
-					self.groups.remove(&group.channel_id);
-				}
-				Channel::Private(ref channel) => {
-					self.private_channels.retain(|c| c.id != channel.id);
-				}
-				Channel::Public(ref channel) => {
-					self.servers.iter_mut().find(|s| s.id == channel.server_id).map(|srv| {
-						srv.channels.retain(|c| c.id != channel.id);
-					});
-				}
-			},
-			Event::ChannelPinsUpdate { ref channel_id, ref last_pin_timestamp } => {
-				for server in &mut self.servers {
-					for channel in &mut server.channels {
-						if channel.id == *channel_id {
-							channel.last_pin_timestamp = last_pin_timestamp.clone();
-							return
-						}
-					}
-				}
+                });
+                let mut file =
+                    OpenOptions::new()
+                    .write(true)
+                    .append(true)
+                    .open("/tmp/discord-rs.log")
+                    .unwrap();
 
-				for channel in &mut self.private_channels {
-					if channel.id == *channel_id {
-						channel.last_pin_timestamp = last_pin_timestamp.clone();
-						return
-					}
-				}
+                if let Err(e) = writeln!(file, "ServerMemberAdd: {} ({:?})", srv.member_count, member.clone()) {
+                    println!("{}", e);
+                }
+            }
+            Event::ServerMemberUpdate { ref server_id, ref roles, ref user, ref nick } => {
+                self.servers.iter_mut().find(|s| s.id == *server_id).map(|srv| {
+                    srv.members.iter_mut().find(|m| m.user.id == user.id).map(|member| {
+                        member.user.clone_from(user);
+                        member.roles.clone_from(roles);
+                        member.nick.clone_from(nick);
+                    })
+                });
+            }
+            Event::ServerMemberRemove(ref server_id, ref user) => {
+                self.servers.iter_mut().find(|s| s.id == *server_id).map(|srv| {
+                    srv.member_count -= 1;
+                    srv.members.retain(|m| m.user.id != user.id);
+                });
+            }
+            Event::ServerMembersChunk(server_id, ref members) => {
+                self.servers.iter_mut().find(|s| s.id == server_id).map(|srv| {
+                    srv.members.extend_from_slice(members);
+                });
+            }
+            Event::ServerSync { server_id, large, ref members, ref presences } => {
+                self.servers.iter_mut().find(|s| s.id == server_id).map(|srv| {
+                    srv.large = large;
+                    srv.members.clone_from(members);
+                    srv.presences.clone_from(presences);
+                });
+            }
+            Event::ServerRoleCreate(ref server_id, ref role) => {
+                self.servers.iter_mut().find(|s| s.id == *server_id).map(|srv| {
+                    srv.roles.push(role.clone());
+                });
+            }
+            Event::ServerRoleUpdate(ref server_id, ref role) => {
+                self.servers.iter_mut().find(|s| s.id == *server_id).map(|srv| {
+                    srv.roles.iter_mut().find(|r| r.id == role.id).map(|srv_role| {
+                        srv_role.clone_from(role);
+                    });
+                });
+            }
+            Event::ServerRoleDelete(ref server_id, ref role_id) => {
+                self.servers.iter_mut().find(|s| s.id == *server_id).map(|srv| {
+                    srv.roles.retain(|r| r.id != *role_id);
+                });
+            }
+            Event::ChannelCreate(ref channel) => match *channel {
+                Channel::Group(ref group) => {
+                    self.groups.insert(group.channel_id, group.clone());
+                }
+                Channel::Private(ref channel) => {
+                    self.private_channels.push(channel.clone());
+                }
+                Channel::Public(ref channel) => {
+                    self.servers.iter_mut().find(|s| s.id == channel.server_id).map(|srv| {
+                        srv.channels.push(channel.clone());
+                    });
+                }
+            },
+            Event::ChannelUpdate(ref channel) => match *channel {
+                Channel::Group(ref group) => {
+                    use std::collections::btree_map::Entry;
+                    match self.groups.entry(group.channel_id) {
+                        Entry::Vacant(e) => { e.insert(group.clone()); }
+                        Entry::Occupied(mut e) => {
+                            let dest = e.get_mut();
+                            if group.recipients.is_empty() {
+                                // if the update omits the recipient list, preserve it
+                                let recipients = ::std::mem::replace(&mut dest.recipients, Vec::new());
+                                dest.clone_from(group);
+                                dest.recipients = recipients;
+                            } else {
+                                dest.clone_from(group);
+                            }
+                        }
+                    }
+                }
+                Channel::Private(ref channel) => {
+                    self.private_channels.iter_mut().find(|c| c.id == channel.id).map(|chan| {
+                        chan.clone_from(channel);
+                    });
+                }
+                Channel::Public(ref channel) => {
+                    self.servers.iter_mut().find(|s| s.id == channel.server_id).map(|srv| {
+                        srv.channels.iter_mut().find(|c| c.id == channel.id).map(|chan| {
+                            chan.clone_from(channel);
+                        })
+                    });
+                }
+            },
+            Event::ChannelDelete(ref channel) => match *channel {
+                Channel::Group(ref group) => {
+                    self.groups.remove(&group.channel_id);
+                }
+                Channel::Private(ref channel) => {
+                    self.private_channels.retain(|c| c.id != channel.id);
+                }
+                Channel::Public(ref channel) => {
+                    self.servers.iter_mut().find(|s| s.id == channel.server_id).map(|srv| {
+                        srv.channels.retain(|c| c.id != channel.id);
+                    });
+                }
+            },
+            Event::ChannelPinsUpdate { ref channel_id, ref last_pin_timestamp } => {
+                for server in &mut self.servers {
+                    for channel in &mut server.channels {
+                        if channel.id == *channel_id {
+                            channel.last_pin_timestamp = last_pin_timestamp.clone();
+                            return
+                        }
+                    }
+                }
 
-				if let Some(group) = self.groups.get_mut(channel_id) {
-					group.last_pin_timestamp = last_pin_timestamp.clone();
-					return
-				}
-			}
-			_ => {}
-		}
-	}
+                for channel in &mut self.private_channels {
+                    if channel.id == *channel_id {
+                        channel.last_pin_timestamp = last_pin_timestamp.clone();
+                        return
+                    }
+                }
 
-	/// Get information about the logged-in user.
-	#[inline]
-	pub fn user(&self) -> &CurrentUser { &self.user }
+                if let Some(group) = self.groups.get_mut(channel_id) {
+                    group.last_pin_timestamp = last_pin_timestamp.clone();
+                    return
+                }
+            }
+            _ => {}
+        }
+    }
 
-	/// Get the servers this user has access to.
-	#[inline]
-	pub fn servers(&self) -> &[LiveServer] { &self.servers }
+    /// Get information about the logged-in user.
+    #[inline]
+    pub fn user(&self) -> &CurrentUser { &self.user }
 
-	/// Get the currently unavailable servers.
-	pub fn unavailable_servers(&self) -> &[ServerId] { &self.unavailable_servers }
+    /// Get the servers this user has access to.
+    #[inline]
+    pub fn servers(&self) -> &[LiveServer] { &self.servers }
 
-	/// Get the active 1-on-1 private channels with other users.
-	#[inline]
-	pub fn private_channels(&self) -> &[PrivateChannel] { &self.private_channels }
+    /// Get the currently unavailable servers.
+    pub fn unavailable_servers(&self) -> &[ServerId] { &self.unavailable_servers }
 
-	/// Get the active groups with other users.
-	#[inline]
-	pub fn groups(&self) -> &BTreeMap<ChannelId, Group> { &self.groups }
+    /// Get the active 1-on-1 private channels with other users.
+    #[inline]
+    pub fn private_channels(&self) -> &[PrivateChannel] { &self.private_channels }
 
-	/// Get the currently ongoing calls.
-	///
-	/// Calls which were already ongoing when the user connected may require
-	/// calling `Connection::sync_calls` to appear here.
-	#[inline]
-	pub fn calls(&self) -> &BTreeMap<ChannelId, Call> { &self.calls }
+    /// Get the active groups with other users.
+    #[inline]
+    pub fn groups(&self) -> &BTreeMap<ChannelId, Group> { &self.groups }
 
-	/// Get the presences of online friends.
-	///
-	/// Usually empty for bot accounts.
-	#[inline]
-	pub fn presences(&self) -> &[Presence] { &self.presences }
+    /// Get the currently ongoing calls.
+    ///
+    /// Calls which were already ongoing when the user connected may require
+    /// calling `Connection::sync_calls` to appear here.
+    #[inline]
+    pub fn calls(&self) -> &BTreeMap<ChannelId, Call> { &self.calls }
 
-	/// Get the friend/block relationships with other users.
-	///
-	/// Usually empty for bot accounts.
-	#[inline]
-	pub fn relationships(&self) -> &[Relationship] { &self.relationships }
+    /// Get the presences of online friends.
+    ///
+    /// Usually empty for bot accounts.
+    #[inline]
+    pub fn presences(&self) -> &[Presence] { &self.presences }
 
-	/// Get the logged-in user's client settings.
-	///
-	/// Returns `None` on bot accounts.
-	#[inline]
-	pub fn settings(&self) -> Option<&UserSettings> { self.settings.as_ref() }
+    /// Get the friend/block relationships with other users.
+    ///
+    /// Usually empty for bot accounts.
+    #[inline]
+    pub fn relationships(&self) -> &[Relationship] { &self.relationships }
 
-	/// Get the logged-in user's per-server notification settings.
-	///
-	/// Returns `None` on bot accounts.
-	#[inline]
-	pub fn server_settings(&self) -> Option<&[UserServerSettings]> { self.server_settings.as_ref().map(|x| &x[..]) }
+    /// Get the logged-in user's client settings.
+    ///
+    /// Returns `None` on bot accounts.
+    #[inline]
+    pub fn settings(&self) -> Option<&UserSettings> { self.settings.as_ref() }
 
-	/// Get the map of notes that have been made by this user.
-	///
-	/// Returns `None` on bot accounts.
-	#[inline]
-	pub fn notes(&self) -> Option<&BTreeMap<UserId, String>> { self.notes.as_ref() }
+    /// Get the logged-in user's per-server notification settings.
+    ///
+    /// Returns `None` on bot accounts.
+    #[inline]
+    pub fn server_settings(&self) -> Option<&[UserServerSettings]> { self.server_settings.as_ref().map(|x| &x[..]) }
 
-	/// Look up a server by its ID.
-	pub fn find_server(&self, id: ServerId) -> Option<&LiveServer> {
-		for server in &self.servers {
-			if server.id == id {
-				return Some(server);
-			}
-		}
-		None
-	}
+    /// Get the map of notes that have been made by this user.
+    ///
+    /// Returns `None` on bot accounts.
+    #[inline]
+    pub fn notes(&self) -> Option<&BTreeMap<UserId, String>> { self.notes.as_ref() }
 
-	/// Look up a private or public channel by its ID.
-	pub fn find_channel(&self, id: ChannelId) -> Option<ChannelRef> {
-		for server in &self.servers {
-			for channel in &server.channels {
-				if channel.id == id {
-					return Some(ChannelRef::Public(server, channel))
-				}
-			}
-		}
-		for channel in &self.private_channels {
-			if channel.id == id {
-				return Some(ChannelRef::Private(channel))
-			}
-		}
-		if let Some(group) = self.groups.get(&id) {
-			return Some(ChannelRef::Group(group))
-		}
-		None
-	}
+    /// Look up a server by its ID.
+    pub fn find_server(&self, id: ServerId) -> Option<&LiveServer> {
+        for server in &self.servers {
+            if server.id == id {
+                return Some(server);
+            }
+        }
+        None
+    }
 
-	/// Look up the voice channel or group call a user is in, if any.
-	///
-	/// For bot users which may be in multiple voice channels, the first found is returned.
-	pub fn find_voice_user(&self, user_id: UserId) -> Option<(Option<ServerId>, ChannelId)> {
-		for server in &self.servers {
-			for vstate in &server.voice_states {
-				if vstate.user_id == user_id {
-					if let Some(channel_id) = vstate.channel_id {
-						return Some((Some(server.id), channel_id));
-					}
-				}
-			}
-		}
-		for call in self.calls.values() {
-			for vstate in &call.voice_states {
-				if vstate.user_id == user_id {
-					return Some((None, call.channel_id));
-				}
-			}
-		}
-		None
-	}
+    /// Look up a private or public channel by its ID.
+    pub fn find_channel(&self, id: ChannelId) -> Option<ChannelRef> {
+        for server in &self.servers {
+            for channel in &server.channels {
+                if channel.id == id {
+                    return Some(ChannelRef::Public(server, channel))
+                }
+            }
+        }
+        for channel in &self.private_channels {
+            if channel.id == id {
+                return Some(ChannelRef::Private(channel))
+            }
+        }
+        if let Some(group) = self.groups.get(&id) {
+            return Some(ChannelRef::Group(group))
+        }
+        None
+    }
+
+    /// Look up the voice channel or group call a user is in, if any.
+    ///
+    /// For bot users which may be in multiple voice channels, the first found is returned.
+    pub fn find_voice_user(&self, user_id: UserId) -> Option<(Option<ServerId>, ChannelId)> {
+        for server in &self.servers {
+            for vstate in &server.voice_states {
+                if vstate.user_id == user_id {
+                    if let Some(channel_id) = vstate.channel_id {
+                        return Some((Some(server.id), channel_id));
+                    }
+                }
+            }
+        }
+        for call in self.calls.values() {
+            for vstate in &call.voice_states {
+                if vstate.user_id == user_id {
+                    return Some((None, call.channel_id));
+                }
+            }
+        }
+        None
+    }
 }
 
 fn update_presence(vec: &mut Vec<Presence>, presence: &Presence) {
-	if presence.status == OnlineStatus::Offline {
-		// Remove the user from the presence list
-		vec.retain(|u| u.user_id != presence.user_id);
-	} else {
-		// Update or add to the presence list
-		if let Some(srv_presence) = vec.iter_mut().find(|u| u.user_id == presence.user_id) {
-			if presence.user.is_none() {
-				let user = srv_presence.user.clone();
-				srv_presence.clone_from(presence);
-				srv_presence.user = user;
-			} else {
-				srv_presence.clone_from(presence);
-			}
-			return
-		}
-		vec.push(presence.clone());
-	}
+    if presence.status == OnlineStatus::Offline {
+        // Remove the user from the presence list
+        vec.retain(|u| u.user_id != presence.user_id);
+    } else {
+        // Update or add to the presence list
+        if let Some(srv_presence) = vec.iter_mut().find(|u| u.user_id == presence.user_id) {
+            if presence.user.is_none() {
+                let user = srv_presence.user.clone();
+                srv_presence.clone_from(presence);
+                srv_presence.user = user;
+            } else {
+                srv_presence.clone_from(presence);
+            }
+            return
+        }
+        vec.push(presence.clone());
+    }
 }
 
 /// A reference to a private or public channel.
 #[derive(Debug, Clone, Copy)]
 pub enum ChannelRef<'a> {
-	/// A private channel
-	Private(&'a PrivateChannel),
-	/// A group channel
-	Group(&'a Group),
-	/// A public channel and its server
-	Public(&'a LiveServer, &'a PublicChannel),
+    /// A private channel
+    Private(&'a PrivateChannel),
+    /// A group channel
+    Group(&'a Group),
+    /// A public channel and its server
+    Public(&'a LiveServer, &'a PublicChannel),
 }
 
 #[inline]
 fn opt_modify<T: Clone>(dest: &mut T, src: &Option<T>) {
-	if let Some(val) = src.as_ref() {
-		dest.clone_from(val);
-	}
+    if let Some(val) = src.as_ref() {
+        dest.clone_from(val);
+    }
 }
