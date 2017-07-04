@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use super::model::*;
 use std::fs::OpenOptions;
+use std::io::Write;
 
 /// Known state composed from received events.
 #[derive(Debug, Clone)]
